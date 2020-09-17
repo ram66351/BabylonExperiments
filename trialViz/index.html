@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html>
+	<head>
+	    <meta charset="UTF-8">
+	    <title>Title</title>
+	    <script src="https://cdn.babylonjs.com/babylon.max.js"></script>
+      <script src="https://preview.babylonjs.com/gui/babylon.gui.js"></script>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.6.2/dat.gui.min.js"></script>"
+      <script src="https://preview.babylonjs.com/gui/babylon.gui.min.js"></script>
+	    <style>
+	        #canvas {
+	            width:100%;
+	            height:100%;
+	        }
+	    </style>
+	</head>
+	
+	<body>
+	 	<canvas id="canvas"></canvas>
+
+	 	<script>
+      	  window.addEventListener('DOMContentLoaded', function(){
+          var canvas = document.getElementById('canvas');
+          var engine = new BABYLON.Engine(canvas, true);
+          var isSceneLoaded = false; 
+          var totalDataPoints = 0;
+          var GlobalTable = [];
+          var GlobalTableDeath = [];
+          var GlobalTableRecov = [];
+          var globeMesh;
+          var dataPoints = [];
+          var totalDays;
+          var GlobalCamera;
+          var advancedTexture;
+          var alphaWhiteBox;
+
+          var manager;
+          var panel;
+          var UIref;
+
+          var graph3D;
+          var bars3D = [];
+          var bars3DRecovered = [];
+          var bars3DDeath = [];
+          var confirmedColor;
+          var deathColor;
+          var whiteAlpha;
+          var graphContainer;
+
+          var highlightedMesh;
+          var highlightColor;
+          var lineTarget;
+          var metaInfo;
+
+          const clamp = (min, max) => (value) =>
+              value < min ? min : value > max ? max : value;
+
+              var myMaterial;
+
+          InitializeDataAndScene();
+
+          async function InitializeDataAndScene()
+          {
+              await GetData();
+              console.log(GlobalTable.length);
+              isSceneLoaded = true;
+
+
+              await PopulateData();
+
+                  // Another GUI on the right
+          }
+
+           async function GetData()
+          {
+            GlobalTable = await FetchDataFromCSV("test.csv");
+            
+            GlobalTableDeath = await FetchDataFromCSV("test2.csv");
+            
+            GlobalTableRecov = await FetchDataFromCSV("test3.csv");
+          }
+
+          async function FetchDataFromCSV(filePath)
+          {
+            const CompleteData = [];
+            const response = await fetch(filePath);
+             const data = await response.text();
+             const table = data.split('\n').splice(1);
+             const rows = [];
+             table.forEach(row => {
+              const col = row.split(',');
+              CompleteData.push(col);              
+             });      
+
+             return CompleteData;
+          }
+
+          var createScene = function()
+          {
+              var scene = new BABYLON.Scene(engine);
+              
+              scene.clearColor = new BABYLON.Color3.White();
+              //var camera = new BABYLON.FreeCamera('camera1', new BABYLON.Vector3(0, 4,-10), scene);
+              var camera = new BABYLON.ArcRotateCamera("Camera", 90, 0, 10, new BABYLON.Vector3(0, 0, 0), scene);
+ 
+                
+              camera.attachControl(canvas, true);
+              GlobalCamera = camera;
+
+              
+             //var ptLight = new BABYLON.PointLight("LuzGlobal", new BABYLON.Vector3(0, 10, 0), scene);
+
+
+             //var ptLight = new BABYLON.SpotLight("spotLight", new BABYLON.Vector3(0, 30, -10), new BABYLON.Vector3(0, -1, 0), Math.PI / 5, 2, scene);
+
+             //ptLight.diffuse = new BABYLON.Color3(1, 1, 1);
+
+
+            var hemi1 = new BABYLON.HemisphericLight("HemiLight", new BABYLON.Vector3(0, -1, 0), scene);
+            hemi1.intensity = 0.5;
+            hemi1.groundColor = new BABYLON.Color3(1,1,1);
+            hemi1.specular = BABYLON.Color3.White();
+              
+            globeMesh = BABYLON.Mesh.CreateSphere("globe", 16, 5, scene);
+            //globeMesh.rotation = new BABYLON.Vector3(0, 0, -Math.PI/2);
+            var globeMat = new BABYLON.StandardMaterial("globeMat", scene);
+
+           globeMat.diffuseTexture = new BABYLON.Texture("./texture/globeTexture.jpg", scene, true, false);
+
+           globeMesh.scaling.x *= -1;
+
+           globeMesh.material = globeMat;
+
+           UIref = new BABYLON.Mesh("dummy", scene);
+           UIref.position = new BABYLON.Vector3(6, 0, 2);
+          
+           var skybox = BABYLON.MeshBuilder.CreateBox("skyBox", {size:5000.0}, scene);
+          var skyboxMaterial = new BABYLON.StandardMaterial("skyBox", scene);
+          skyboxMaterial.backFaceCulling = false;
+            var files = [
+                "texture/skyboxXpos.png",
+                "texture/skyboxYpos.png",
+                "texture/skyboxZpos.png",
+                "texture/skyboxXneg.png",
+                "texture/skyboxYneg.png",
+                "texture/skyboxZneg.png",
+            ];
+          skyboxMaterial.reflectionTexture = new BABYLON.CubeTexture.CreateFromImages(files, scene);
+          skyboxMaterial.reflectionTexture.coordinatesMode = BABYLON.Texture.SKYBOX_MODE;
+          skyboxMaterial.disableLighting = true;
+          skybox.material = skyboxMaterial;
+
+          DrawGUI();
+
+           myMaterial = new BABYLON.StandardMaterial("mat", scene);
+  myMaterial.diffuseColor = BABYLON.Color3.Red();
+  myMaterial.emissiveColor = new BABYLON.Color3(0, 1, 1);
+  myMaterial.alpha = 0.2;
+
+  //3D GUI
+
+          
+          /*manager = new BABYLON.GUI.GUI3DManager(scene);
+
+          panel = new BABYLON.GUI.PlanePanel();
+          panel.margin = 0.2;
+          panel.columns = 2;
+          panel.rows = 2;
+
+          manager.addControl(panel);
+          panel.linkToTransformNode(UIref);
+          panel.position.z = -1.5;*/
+          UIref.billboardMode = BABYLON.Mesh.BILLBOARDMODE_ALL;
+
+          confirmedColor = new BABYLON.StandardMaterial("confirm", scene);
+          confirmedColor.diffuseColor = new BABYLON.Color3(1, 1, 0);
+
+          recoveredColor = new BABYLON.StandardMaterial("recovered", scene);
+          recoveredColor.diffuseColor = new BABYLON.Color3(0, 1, 0);
+
+          deathColor = new BABYLON.StandardMaterial("death", scene);
+          deathColor.diffuseColor = new BABYLON.Color3(1, 0, 0);
+
+
+        whiteAlpha = new  BABYLON.StandardMaterial("alphaWhite", scene);
+          whiteAlpha.diffuseColor = new BABYLON.Color3(1, 1, 1);
+          whiteAlpha.alpha = 0.2;
+
+          highlightColor = new BABYLON.StandardMaterial("highlightBlue", scene);
+          highlightColor.diffuseColor = new BABYLON.Color3(0, 1, 0);
+
+      
+          CreateGraph();
+          CreateTitle();
+
+          var h = window.innerHeight;
+            var w = window.innerWidth
+            console.log("width : "+ w +", height : "+h);
+              metaInfo = new BABYLON.GUI.TextBlock();
+              metaInfo.text = "";
+              metaInfo.color = "white";
+              metaInfo.fontSize = 24;
+              metaInfo.top = (h/2)-40;
+              metaInfo.left = -(w/2)+300;
+              advancedTexture.addControl(metaInfo);
+                   //panel.blockLayout = true;
+
+    //panel.blockLayout = false;
+    
+
+
+    // Enable VR
+    var vrHelper = scene.createDefaultVRExperience({createDeviceOrientationCamera:false});
+
+            return scene;
+          }
+
+          var scene = createScene();
+          engine.runRenderLoop(function(){
+              if(isSceneLoaded)
+              {
+                scene.render();
+
+                if(meshLine != null)
+                {    
+                    drawLine(fromPoint, toPoint);
+                }
+              }           
+          });
+
+
+          function addButton() {
+        var button = new BABYLON.GUI.HolographicButton("orientation");
+        panel.addControl(button);
+
+        button.text = "Button #" + panel.children.length;
+        //return button;
+
+    }
+
+
+          function PopulateData()
+          {
+            var dataInstance = BABYLON.MeshBuilder.CreateSphere(i+"", {height: 1}, scene);
+            dataInstance.material = myMaterial;
+            for(var i=0; i<GlobalTable.length; i++)
+            {
+              // str = "";
+              // for (var j = 0; j <GlobalTable[0].length; j++) 
+              // {
+              //    str += GlobalTable[i][j] +", ";
+              // }
+              
+              
+              if(GlobalTable[i][2] == 0 || GlobalTable[i][3] == 0)
+                continue;
+
+              totalDataPoints++;
+
+              var pos = PositionOnGlobe(parseFloat(GlobalTable[i][2]), parseFloat(GlobalTable[i][3]));
+              //console.log(pos);
+
+              var dScale = 0
+            
+              
+              for(var j=4; j<99; j++)
+              {
+                  dScale += parseFloat(GlobalTable[i][j]);
+              }
+              //console.log(GlobalTable[i][0] +" "+ dScale);
+              var dScale = clamp(0, 3)(dScale/10);
+              dScale /= 10; 
+         
+
+              var point = dataInstance.createInstance(i+"_instance");
+              point.position = pos;
+              point.scaling = new BABYLON.Vector3(dScale, dScale, dScale); //new BABYLON.Vector3(0.1, 0.1, 0.1);
+              //point.material = myMaterial;
+              point.actionManager = new BABYLON.ActionManager(scene);
+
+              // var dir = new BABYLON.Vector3(0, 1, 0);
+              // var crossDir = BABYLON.Vector3.Cross(dir, pos);
+              // var angle = BABYLON.Angle.betweentwopoints(dir,pos);
+              // point.Rotate(crossDir, angle, BABYLON.Space.LOCAL);
+             
+              point.actionManager.registerAction(new BABYLON.ExecuteCodeAction(BABYLON.ActionManager.OnPickTrigger, function (evt) {
+                  var name = evt.meshUnderPointer.name;
+                  console.log(GlobalTable[name][0]);
+                    createLabel(evt.meshUnderPointer, name);
+                  //FocusOnData(evt.meshUnderPointer);
+              }));
+
+              var meshLine;
+
+              point.actionManager.registerAction(new BABYLON.ExecuteCodeAction(BABYLON.ActionManager.OnPickDownTrigger, function (evt) {
+                var name = evt.meshUnderPointer.name;
+                  console.log("Double clicked on "+ name);
+                  lineTarget = evt.meshUnderPointer;
+
+
+                   console.log(GlobalTable[parseInt(name)][0]);
+                  FocusOnData(evt.meshUnderPointer);
+                  var newCamPos = evt.meshUnderPointer.position.subtract(globeMesh.position).normalize();
+                  //GlobalCamera.position =  new BABYLON.Vector3(newCamPos.x * 10, newCamPos.y * 10, newCamPos.z * 10);//multiply(1.2);
+                  
+                  //GlobalCamera.setTarget(evt.meshUnderPointer);
+                    createLabel(evt.meshUnderPointer,name);
+
+                    var hitPos = evt.meshUnderPointer.position;
+                    //graph3D.position =  new BABYLON.Vector3(-hitPos.x * 1.75, hitPos.y * 1.75, hitPos.z * 1.75);
+
+                      var subarray = GlobalTable[parseInt(name)].slice(4, 100);
+                      var max = subarray.reduce(function(a, b) {
+                        return Math.max(a, b);
+                      });
+                      var min = subarray.reduce(function(a, b) {
+                        return Math.min(a, b);
+                      });
+
+                    for(var i=0; i<100;i++)
+                    {
+                       var xzScaling = bars3D[i].scaling;
+
+                      if(i<4)
+                      {
+                         // bars3D[i].scaling.y = 0;
+                          bars3D[i].scaling = new BABYLON.Vector3(xzScaling.x, 0 ,xzScaling.z);
+
+                          bars3DDeath[i].scaling = new BABYLON.Vector3(xzScaling.x, 0 ,xzScaling.z);
+
+                          bars3DRecovered[i].scaling = new BABYLON.Vector3(xzScaling.x, 0, xzScaling.z);
+
+                          continue;
+                      }
+
+                      var yScale = map(min, max, 0, 200, GlobalTable[parseInt(name)][i]); // clamp(0, 200)();
+                      bars3D[i].scaling = new BABYLON.Vector3(xzScaling.x, yScale ,xzScaling.z);
+
+                      var yScaleDeath = map(min, max, 0, 200, GlobalTableDeath[parseInt(name)][i]); // clamp(0, 200)();
+                      bars3DDeath[i].scaling = new BABYLON.Vector3(xzScaling.x, yScaleDeath ,xzScaling.z);
+
+                      
+                      console.log(name +", "+ i);
+                      var yScaleReco = map(min, max, 0, 200, GlobalTableRecov[parseInt(name)][i]); // clamp(0, 200)();
+                      
+                      bars3DRecovered[i].scaling = new BABYLON.Vector3(xzScaling.x, yScaleReco ,xzScaling.z);
+                    }
+
+                    if(highlightedMesh != null)
+                    {
+                       highlightedMesh.material = evt.meshUnderPointer.material;
+
+                    }
+
+                    evt.meshUnderPointer.material = highlightColor;
+                       highlightedMesh = evt.meshUnderPointer;
+                      fromPoint = evt.meshUnderPointer;
+                      toPoint = alphaWhiteBox;
+                       drawLine(fromPoint, toPoint);
+
+                       var state = "Unknown";
+                       if(GlobalTableRecov[parseInt(name)][0] != "")
+                        state = GlobalTableRecov[parseInt(name)][0];
+
+
+                       var info = "State/Province : " + state + "\nCountry : "+ GlobalTableRecov[parseInt(name)][1];
+                       ShowMetaInfo(info);
+
+              }));
+            
+              globeMesh.addChild(point);
+              dataPoints.push(point);
+            }
+
+            console.log(totalDataPoints);
+          }
+    
+
+          var meshLine;
+          var fromPoint;
+          var toPoint;
+          function drawLine(from, to)
+          {
+ 
+            if(meshLine != null)
+            {
+              meshLine.dispose();
+            }
+
+             var path = [];
+             path.push(from.absolutePosition);
+             path.push(to.absolutePosition);
+             meshLine = BABYLON.Mesh.CreateLines("meshLine", path, scene);
+          }
+
+          function CreateTitle()
+          {
+            var h = window.innerHeight;
+            var w = window.innerWidth
+            console.log("width : "+ w +", height : "+h);
+              var text1 = new BABYLON.GUI.TextBlock();
+              text1.text = "WebGL Data Visualization - Demo";
+              text1.color = "white";
+              text1.fontSize = 30;
+              text1.top = -(h/2)+100;
+              text1.left = -(w/2)+300;
+              advancedTexture.addControl(text1)
+          }
+
+          function ShowMetaInfo(info)
+          {
+            metaInfo.text = info;
+          }
+
+
+     function createLabel(mesh, index) {
+
+        console.log(mesh.name +", index : " +index);
+        var label = new BABYLON.GUI.Rectangle("label for " + mesh.name);
+        label.background = "black"
+        label.height = "50px";
+        label.alpha = 0.5;
+        label.width = "180px";
+        label.cornerRadius = 15;
+        label.thickness = 1;
+        label.linkOffsetY = 30;
+        advancedTexture.addControl(label); 
+        label.linkWithMesh(mesh);
+
+        var text1 = new BABYLON.GUI.TextBlock();
+        index = parseInt(mesh.name);
+        text1.text = GlobalTable[index][0] +", "+ GlobalTable[index][1]   +"\n"+ GlobalTable[index ][98];
+     
+        text1.color = "white";
+        label.addControl(text1);  
+
+        setInterval(LabelTimer, 10000, label);
+
+       
+      }
+
+function LabelTimer(label) {
+  label.dispose();
+}
+
+function createPermanentLabel(mesh, color, text)
+{
+  console.log(mesh.name);
+        var label = new BABYLON.GUI.Rectangle("label for " + mesh.name);
+        label.background = color;
+        label.height = "40px";
+        label.alpha = 0.5;
+        label.width = "100px";
+        label.cornerRadius = 15;
+        label.thickness = 1;
+        label.linkOffsetY = 30;
+        advancedTexture.addControl(label); 
+        label.linkWithMesh(mesh);
+
+        var text1 = new BABYLON.GUI.TextBlock();
+        index = parseInt(mesh.name);
+        text1.text = text;
+     
+        text1.color = "white";
+        label.addControl(text1);  
+}
+          function PositionOnGlobe(lat, lon)
+          {
+              var cosLat = Math.cos(lat * Math.PI / 180.0);
+              var sinLat = Math.sin(lat * Math.PI / 180.0);
+              var cosLon = Math.cos(lon * Math.PI / 180.0);
+              var sinLon = Math.sin(lon * Math.PI / 180.0);
+              var rad = globeMesh.scaling.x * 2.6;
+              var x = rad * cosLat * cosLon;
+              var y = rad * cosLat * sinLon;
+              var z = rad * sinLat;
+              return new BABYLON.Vector3(-x, y, z);
+          }
+
+          function PositionOnGlobe2(lt, ln)
+          {
+            var ltR = lt * (Math.PI / 180.0);
+            var lnR = ln * (Math.PI / 180.0);
+            var _radius = globeMesh.scaling.x * 2.6;
+            var x = (_radius) * Math.cos(ltR) * Math.cos(lnR);
+            var y = (_radius) * Math.cos(ltR) * Math.sin(lnR);
+            var z = (_radius) * Math.sin(ltR);
+
+            return new BABYLON.Vector3(-x, y, z);
+          }
+
+          function FocusOnData(data3D)
+    {
+      console.log("FocusOnData");
+        var earth = globeMesh;
+        var oldRotation = earth.rotation;
+        earth.rotation = new BABYLON.Quaternion.Identity();
+        var fromDirection = data3D.position.subtract(earth.position).normalize();
+        var toDirection = GlobalCamera.position.subtract(earth.position).normalize();
+        var fromRotation = BABYLON.Quaternion.Inverse(LookRotation(fromDirection, new BABYLON.Vector3(0,1,0)));
+        var targetRotation = LookRotation(toDirection,new BABYLON.Vector3(0,1,0)).multiply(fromRotation);
+
+        earth.rotation = targetRotation;
+        //AnimateEarthRotation(0.8, earth, oldRotation, targetRotation);
+    }
+
+     function AnimateEarthRotation(dt, earth, from, to)
+    {
+        earth.rotation = from;
+        var t = 0;
+        while (t < 3)
+        {   
+            
+            t += scene.deltaTime / dt;
+            earth.rotation = BABYLON.Quaternion.Slerp(from, to, t);
+        }
+        
+    }
+
+          function map (in_min, in_max, out_min, out_max, value) {
+  return (value - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
+
+          function CreateGraph()
+          {
+            console.log("Creating Graph");
+
+            /*if(scene.getMeshByName("graphContainer"));
+              {
+                scene.getMeshByName("graphContainer").dispose();
+              }*/
+            //if(prevGraph != null)
+              //prevGraph.dispose();
+            
+            //scene.getMeshByName("graphContainer").dispose();
+
+            graphContainer = BABYLON.Mesh.CreateBox("graphContainer", 1, scene);
+            graphContainer.isVisible = false;
+
+            advancedTexture = BABYLON.GUI.AdvancedDynamicTexture.CreateFullscreenUI("UI");
+            advancedTexture.layer.layerMask = 2;
+
+
+
+           //alphaWhiteBox.scaling = new BABYLON.Vector3(5,5,5);
+           //alphaWhiteBox.setPivotPoint( new BABYLON.Vector3(0, -2.5, 0));
+
+
+            // Our built-in 'ground' shape.
+            var ground = BABYLON.MeshBuilder.CreateGround("ground", {width: 5, height: 5}, scene);
+
+            ground.scaling = new BABYLON.Vector3(1, 1, 1);
+            ground.parent = graphContainer;
+
+            alphaWhiteBox = BABYLON.MeshBuilder.CreateBox("ground", {width: 5, height: 3}, scene);
+            
+           alphaWhiteBox.position = new  BABYLON.Vector3(ground.position.x,ground.position.y + 1.5, ground.position.z);
+           alphaWhiteBox.parent = graphContainer;
+           alphaWhiteBox.scaling = new BABYLON.Vector3(alphaWhiteBox.scaling.x, alphaWhiteBox.scaling.y, alphaWhiteBox.scaling.z*2.5); 
+           alphaWhiteBox.material = whiteAlpha;
+           alphaWhiteBox.backFaceCulling = false;
+           
+
+            for(var i=-50; i<50; i++)
+            {
+                var bar = BABYLON.Mesh.CreateBox("bar_"+i, 0.01, scene);
+                bar.setPivotPoint( new BABYLON.Vector3(0, -0.005, 0));
+                bar.scaling = new BABYLON.Vector3(2, 1, 2);
+                bar.position.x = i/20;
+                bar.parent = graphContainer;
+                bar.material = confirmedColor;
+                bars3D.push(bar);
+
+                var bar1 = BABYLON.Mesh.CreateBox("bar_rec_"+i, 0.01, scene);
+                bar1.setPivotPoint( new BABYLON.Vector3(0, -0.005, 0));
+                bar1.scaling = new BABYLON.Vector3(2, 1, 2);
+                bar1.position.x = i/20;
+                bar1.position.z = 1.5;
+                bar1.parent = graphContainer;
+                bar1.material = recoveredColor;
+                bars3DRecovered.push(bar1);
+
+                var bar2 = BABYLON.Mesh.CreateBox("bar_death_"+i, 0.01, scene);
+                bar2.setPivotPoint( new BABYLON.Vector3(0, -0.005, 0));
+                bar2.scaling = new BABYLON.Vector3(2, 1, 2);
+                bar2.position.x = i/20;
+                bar2.position.z = -1.5;
+                bar2.parent = graphContainer;
+                bar2.material = deathColor;
+                bars3DDeath.push(bar2);
+
+                 if(i==-50)
+                {
+                  console.log("index 50");
+                  
+                  createPermanentLabel(bar1, "green", "Recovered");
+                  
+                }
+
+                if(i==0)
+                {
+                  createPermanentLabel(bar, "yellow", "Confirmed");
+                }
+
+                if(i== 49)
+                {
+                  createPermanentLabel(bar2, "red", "Dead");  
+                }
+                
+
+                /*bar.actionManager.registerAction(new BABYLON.ExecuteCodeAction(BABYLON.ActionManager.OnPickTrigger, function (evt){  
+                  //console.log("bar index : "+ i);
+              }));*/
+
+                
+            }
+         
+
+            graphContainer.scaling = new BABYLON.Vector3(0.5, 0.5, 0.5); 
+
+            
+            graphContainer.parent = GlobalCamera;
+           
+
+            //graphContainer.billboardMode = BABYLON.Mesh.BILLBOARDMODE_ALL;
+            graph3D = graphContainer;
+            graphContainer.parent = GlobalCamera;
+            graphContainer.position = new BABYLON.Vector3(-2, -1, 5);
+
+          }
+
+    
+
+    var LookRotation = (pos, up = new BABYLON.Vector3(0,1,0))=>{
+    var result = BABYLON.Matrix.Zero();
+    BABYLON.Matrix.LookAtLHToRef(BABYLON.Vector3.Zero(), pos, new BABYLON.Vector3(0,1,0), result)
+    result.invert()
+    return BABYLON.Quaternion.FromRotationMatrix(result)
+}
+
+          function DrawGUI()
+          {
+            var oldgui = document.getElementById("datGUI");
+            if (oldgui != null){
+              oldgui.remove();
+            }
+
+          var gui = new dat.GUI();  
+          gui.domElement.style.marginTop = "100px";
+          gui.domElement.id = "datGUI";
+          var options = {
+            diameter: 0.1,
+            dataSize:0.1,
+            day:1,
+            graphXPos:0,
+            graphYPos:0,
+            graphZPos:0,
+            graphScale:1,
+            graphRot:0,
+            globePosX:0,
+            globePosY:0,
+            globePosZ:0
+          }
+
+
+
+           gui.add(options, "diameter", 0.1, 3).onChange(function(value) {
+           globeMesh.scaling = new BABYLON.Vector3(value, value, value);
+          });
+
+            gui.add(options, "dataSize", 0.01, 0.2).onChange(function(value) {
+           
+              //console.log(dataPoints.length);
+              for(var i=0; i<dataPoints.length; i++)
+              {
+                 dataPoints[i].scaling = new BABYLON.Vector3(value, value, value);
+              }           
+          });
+
+
+            gui.add(options, "day", 1, 99).onChange(function(value) {
+              console.log("totalDays : "+ totalDays);
+              //console.log(dataPoints.length);
+              for(var i=0; i<dataPoints.length; i++)
+              {
+                 var dScale = 0
+                  for(var j=4; j<4 + value; j++)
+                  {
+                      dScale += parseFloat(GlobalTable[i][j]);
+                  }
+                  //console.log(GlobalTable[i][0] +" "+ dScale);
+                  var dScale = clamp(0, 3)(dScale/10);
+                  dScale /= 10; 
+                  dataPoints[i].scaling = new BABYLON.Vector3(dScale, dScale, dScale);
+              }
+
+              for(var i=0; i<100; i++)
+              {
+                if(i < value)
+                {
+                   bars3D[i].isVisible = true;
+                   bars3DDeath[i].isVisible = true;
+                   bars3DRecovered[i].isVisible = true;
+                }
+                else
+                {
+                   bars3D[i].isVisible = false;
+                   bars3DDeath[i].isVisible = false;
+                   bars3DRecovered[i].isVisible = false;
+                }
+              }
+          });
+
+            gui.add(options, "graphXPos", -5, 5).onChange(function(value) {
+
+              graphContainer.position.x = value
+
+              
+          });
+
+            gui.add(options, "graphYPos", -5, 5).onChange(function(value) {
+
+              graphContainer.position.y = value;              
+          });
+
+            gui.add(options, "graphZPos", 1, 10).onChange(function(value) {
+
+              graphContainer.position.z = value; 
+          });
+
+             gui.add(options, "graphScale", 0.1, 2).onChange(function(value) {
+           graphContainer.scaling = new BABYLON.Vector3(value, value, value);
+          });
+
+              gui.add(options, "graphRot", -2, 2).onChange(function(value) {
+           graphContainer.rotation.y = value;
+          });
+
+               gui.add(options, "globePosX", -10, 10).onChange(function(value) {
+           globeMesh.position = new BABYLON.Vector3(value, globeMesh.position.y, globeMesh.position.z);
+          });
+
+                gui.add(options, "globePosY", -10, 10).onChange(function(value) {
+           globeMesh.position = new BABYLON.Vector3(globeMesh.position.x, value , globeMesh.position.z);
+          });
+
+                gui.add(options, "globePosZ", -10, 10).onChange(function(value) {
+           globeMesh.position = new BABYLON.Vector3(globeMesh.position.x, globeMesh.position.y , value);
+          });
+         }
+     });
+
+      //fetch("https://ramtestdata.s3.ap-south-1.amazonaws.com/test.csv").then(response => {console.log(response)});
+
+
+   
+     
+  </script>
+	</body>
+</html>

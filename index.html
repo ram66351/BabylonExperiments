@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+	<head>
+	    <meta charset="UTF-8">
+	    <title>Title</title>
+	    <script src="https://cdn.babylonjs.com/babylon.max.js"></script>
+	    <style>
+	        #canvas {
+	            width:100%;
+	            height:100%;
+	        }
+	    </style>
+	</head>
+	
+	<body>
+	 	<canvas id="canvas"></canvas>
+
+	 	<script>
+      	  window.addEventListener('DOMContentLoaded', function(){
+          var canvas = document.getElementById('canvas');
+          var engine = new BABYLON.Engine(canvas, true);
+          var createScene = function(){
+              var scene = new BABYLON.Scene(engine);
+              
+              scene.clearColor = new BABYLON.Color3.White();
+              var camera = new BABYLON.FreeCamera('camera1', new BABYLON.Vector3(0, 4,-10), scene);
+              //var camera = new BABYLON.ArcRotateCamera("Camera", 0, 0, 10, new BABYLON.Vector3(0, 0, 0), scene);
+ 
+              camera.setTarget(BABYLON.Vector3.Zero());
+              camera.attachControl(canvas, true);
+
+             //var ptLight = new BABYLON.PointLight("LuzGlobal", new BABYLON.Vector3(0, 10, 0), scene);
+
+              var ptLight = new BABYLON.SpotLight("spotLight", new BABYLON.Vector3(0, 30, -10), new BABYLON.Vector3(0, -1, 0), Math.PI / 5, 2, scene);
+              ptLight.diffuse = new BABYLON.Color3(1, 0, 0);
+
+
+              var box = BABYLON.Mesh.CreateBox("Box",2.0,scene);
+
+              scene.getMeshByName("Box").actionManager = new BABYLON.ActionManager(scene);
+					scene.getMeshByName("Box").actionManager.registerAction(new BABYLON.ExecuteCodeAction(BABYLON.ActionManager.OnPickTrigger, function (evt) {
+						      ptLight.setEnabled(!ptLight.isEnabled());
+							}));
+              var origin = new BABYLON.Vector3(-3, 0, 0);
+              var destination = new BABYLON.Vector3(3, 0, 0);
+              var control = new BABYLON.Vector3(0, 2, 0); 
+              var nb_of_points = 20;
+			  
+			  var bezier2 = BABYLON.Curve3.CreateQuadraticBezier(origin, control, destination, nb_of_points);
+			  var quadraticBezierCurve = BABYLON.Mesh.CreateLines("qbezier", bezier2.getPoints(), scene);
+            quadraticBezierCurve.color = new BABYLON.Color3(1, 1, 0.5);
+
+
+
+        		var path = bezier2.getPoints();
+        		var l = bezier2.length();
+
+        		console.log("path : "+ path);
+        		console.log("l : " + l);
+
+
+              
+              return scene;
+          }
+          var scene = createScene();
+          engine.runRenderLoop(function(){
+              scene.render();
+          });
+      });
+  </script>
+	</body>
+</html>
